@@ -52,6 +52,7 @@ comment saying what it is for. This is the pattern the game's own multi-file exa
 | `hoverlog.lua` | `SotaLoreAdmin.HoverLog`: a diagnostic (`/sladmin hoverlog`) that writes the tooltip text of items under the mouse to chat (shortened) and in full to `sotalore-hoverlog.txt` |
 | `targetlog.lua` | `SotaLoreAdmin.TargetLog`: a diagnostic (`/sladmin targetlog`) that writes each new target to chat (name, id, dead, health, focus, the stats Animal Lore shows, pet or party member), to learn whether targeting can add creatures to the finds that are never fought |
 | `game_skills.lua` | `SotaLoreAdmin.GameSkills`: every skill in the game (`ShroudGetAllSkills`) to `sotalore-game-skills.json`, `/sladmin gameskills`; not uploaded, copied into the repo for the app's code |
+| `current_scene.lua` | `SotaLoreAdmin.CurrentScene`: the scene the player is in and when it was entered, to `sotalore-current-scene.json` when it changes (checked every frame, since a scene change reloads the plugin); not uploaded, the companion reads it to file screenshots by scene |
 | `main.lua` | the only file with `ShroudOn...` callbacks, the `/sladmin` command and the key binding; read it first |
 
 Data modules (`recipes_export`, `finds_data`) know nothing about windows. They tell a window about
@@ -111,7 +112,8 @@ Untested ideas:
   game's path (that once failed with odd "file already exists" errors). Remove a junction with `cmd /c rmdir
   <path>`, which removes only the link; a recursive delete can go through it into the repo.
 - Output files (`sotalore-recipes-new.json`, `-recipes-all.json`, `-recipes-one.json`, `-item-catalog.json`,
-  `-scene-finds.json`, `-game-skills.json`; named after the site's navigation since 0.11.0) land in the client's
+  `-scene-finds.json`, `-game-skills.json`, and `-current-scene.json` for the companion; named after the site's
+  navigation since 0.11.0) land in the client's
   `Lua/` folder.
 - `sl-recipes.account.json` was this plugin's saved data before the rename to `sl-admin`.
 - **The 256 KB saved-data limit has bitten twice.** On 2026-10-24 `sl-admin.account.json` reached 256,011 bytes
@@ -226,6 +228,18 @@ Untested ideas:
   source.
 - Group slots in recipes list at most 30 choices; the larger "any item of this kind" groups are truncated
   (`complete: false` in `groups`). Names repeat, so groups are identified by `groupKey`.
+- **Screenshots: nothing in the API** (checked at API 58, #2). No call takes a screenshot, hides or shows the HUD,
+  presses keys or runs game commands, and no callback says a screenshot was taken. `ShroudIsUIActive()` only reads
+  whether the HUD is shown (no callback; check it each frame). The game's keys: `TakeScreenshot` F11,
+  `ScreenshotMode` (hides the interface) F10. The QA client saves to `%USERPROFILE%\Pictures\SotA\DEV\` as
+  `SotA_MM-DD-YY_HH-MM_N.png`; the regular client to `Pictures\SotA\` (confirmed).
+- **A scene change reloads every add-on** (the docs say so in passing: "/lua reload, or a scene change"). The new
+  instance starts during the loading screen, with no scene loaded, and **it evidently never gets
+  `ShroudOnSceneLoaded` for that load** (inferred: the first 0.16.0 scene file, written from that callback and from
+  `ShroudOnStart`, never changed on a zone line, 2026-11-23, #2). To act on entering a scene,
+  check `ShroudGetSceneInfo().loaded` and the scene's name each frame. `ShroudOnSceneUnloaded` reaches the old
+  instance (untested). Module state lasts only one scene visit.
+- **The game's `os.time()` returns a fraction** (`1795468515.36479`). Use `math.floor(os.time())` for whole seconds.
 - The game has a hotkey that switches tooltips off. While they are off the `...UnderMouse` calls see nothing,
   so `/sladmin capture` and `/sladmin hoverlog` capture nothing, and the plugin can't tell that from "not pointing at
   an item". Nothing to do about it for now; the capture-on message in chat reminds the player.

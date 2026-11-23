@@ -14,6 +14,7 @@
 --   hoverlog.lua        a diagnostic: writes an item's tooltip text to chat (/sladmin hoverlog)
 --   targetlog.lua       a diagnostic: writes what the game says about each new target to chat (/sladmin targetlog)
 --   game_skills.lua     every skill in the game -> a file for the repo (/sladmin gameskills)
+--   current_scene.lua   the scene the player is in -> a small file the companion app reads
 --
 -- The files run in the order the manifest lists them.
 
@@ -29,6 +30,7 @@ local TargetLog = SotaLoreAdmin.TargetLog
 local ItemDetails = SotaLoreAdmin.ItemDetails
 local GearSamples = SotaLoreAdmin.GearSamples
 local GameSkills = SotaLoreAdmin.GameSkills
+local CurrentScene = SotaLoreAdmin.CurrentScene
 
 -- The /sladmin command: a word picks an action, any other text searches the recipes, and nothing at
 -- all opens or closes the toolbar. The key binding does the same as the bare command.
@@ -86,6 +88,7 @@ function ShroudOnStart()
     ToolbarUI.build()
     RecipesUI.load()
     FindsUI.update()
+    CurrentScene.start()
 
     -- Every SotaLore plugin's command is /sl<name> for the package sl-<name> (/sotalore itself is refused:
     -- "sota" is a reserved prefix).
@@ -114,6 +117,7 @@ function ShroudOnUpdate()
     GearSamples.save(false)
     FindsUI.tick()
     Finds.save(false)
+    CurrentScene.tick()
 end
 
 -- Things that happen in the world, recorded on the find list while tracking is on.
@@ -129,10 +133,17 @@ function ShroudOnCombatEvents(events)
     if Finds.tracking and FindsUI.isBuilt() then Finds.recordCreatures(events) end
 end
 
+-- (The current scene file is not written here: a scene change reloads the plugin, and the new one doesn't get this
+-- call. CurrentScene.tick in ShroudOnUpdate notices the new scene instead.)
 function ShroudOnSceneLoaded()
     Finds.newVisit()
     TargetLog.newVisit()
     FindsUI.update()
+end
+
+-- Leaving a scene (a zone line, a recall, a logout): the current scene file says the scene has ended.
+function ShroudOnSceneUnloaded()
+    CurrentScene.sceneUnloaded()
 end
 
 -- The player's target changed (id -1 when it cleared): a creature seen, for the find list, and a line for the
@@ -142,8 +153,10 @@ function ShroudOnTargetChanged(id, name)
     TargetLog.onChange(id, name)
 end
 
--- The find list is saved to the saved variables on these.
+-- The find list is saved to the saved variables on these. At logout the current scene file also says the player
+-- left the world.
 function ShroudOnLogOut()
+    CurrentScene.loggedOut()
     ItemDetails.save(true)
     GearSamples.save(true)
     Finds.save(true)

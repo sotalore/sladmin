@@ -1,4 +1,4 @@
-# sl-admin export format (v0.15.0)
+# sl-admin export format (v0.16.0)
 
 The contract between `sl-admin` (SotaLore Admin, the add-on for site admins) and the readers of its files: the
 app in `sotalore/sotalore`, and later the companion. **Only this repo changes this file**, in the same PR as the
@@ -477,6 +477,50 @@ agrees except one name. What's new or different in the game:
 
 `schoolKey` isn't always the school's name without spaces: the Moon school's key is `Lunar`.
 
+### The current scene, from `sl-admin` v0.16.0 (not uploaded; for the companion)
+
+`sotalore-current-scene.json` says which scene the player is in, and since when. **Not for upload:** the companion
+(`sotalore/companion`) reads it to file screenshots and spoken notes under the scene they were taken in. A plugin can't
+take a screenshot or tell that one was taken (nothing in the Lua API does; see sotalore/sladmin#2), so the companion
+matches a screenshot's time against `enteredAt`. Each game client writes its own copy in its own `Lua/` folder (the
+regular client's and the QA client's `...(DEV)\Lua`).
+
+The plugin rewrites the whole file each time it changes:
+- when a scene starts unloading (a zone line, a recall, a logout), with `"state": "loading"`;
+- within a frame of the next scene appearing, with `"state": "inScene"`. A scene change reloads every add-on, so the
+  plugin finds this out by checking each frame, not from `ShroudOnSceneLoaded`;
+- when the plugin starts (`/lua reload`) while already in a scene;
+- at logout, with `"state": "loggedOut"`.
+
+```json
+{"apiVersion":58,"plugin":"sl-admin","pluginVersion":"0.16.0","type":"currentScene","state":"inScene",
+ "name":"Owl's Head","rawName":"OwlsHead_01","dungeonName":null,"dungeonOwner":null,"character":"Gravidy",
+ "enteredAt":1795463924,"enteredAtUtc":"2026-11-23T19:58:44Z","enteredAtExact":true,"writtenAt":1795463924}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `state` | `"inScene"`, `"loading"` (the player left a scene and the next isn't loaded yet), or `"loggedOut"` (back at the login screen). For `"loading"` and `"loggedOut"`, `name`, `rawName`, `dungeonName`, `dungeonOwner` and `character` are null, and `enteredAt` is when that state began. A logout may show `"loading"` first and then `"loggedOut"`. Screenshots taken while the state isn't `"inScene"` belong to no scene. |
+| `name` | The scene's display name (`ShroudGetCurrentSceneName`), in the player's language, the same name the finds file uses. |
+| `rawName` | The game's internal scene id (`ShroudGetCurrentSceneNameRaw`), for example `OwlsHead_01`. It doesn't depend on the language, so compare scenes with this. |
+| `dungeonName`, `dungeonOwner` | Inside a player dungeon or basement: the name its owner gave it, and the owner's character name. Otherwise null. `dungeonName` can be null when `dungeonOwner` isn't (the owner hasn't named it). `name` and `rawName` always give the real scene. |
+| `character` | The character being played. |
+| `enteredAt` | When this scene was entered (or the player logged out), in whole seconds since 1970 UTC (Lua's `os.time()`). |
+| `enteredAtUtc` | The same time as ISO 8601 UTC text. |
+| `enteredAtExact` | `false` when the plugin started up already in the scene and couldn't learn when it was entered: `enteredAt` is then the time it started, and the scene began earlier. `true` otherwise. After a `/lua reload` in the same scene by the same character, the plugin keeps the earlier file's `enteredAt`, so it stays exact. |
+| `writtenAt` | When the file was written (seconds since 1970 UTC). |
+
+To find a screenshot's scene, the companion should watch this file as it changes: it holds only the current scene, not
+a history, so a screenshot handled after the player has moved on must be matched against scene changes the companion
+recorded itself.
+
+**Where the game saves screenshots** (seen on Darren's machine, 2026-11-23): the QA client (`Shroud of the
+Avatar(DEV)`) saves them in `%USERPROFILE%\Pictures\SotA\DEV\`, named `SotA_MM-DD-YY_HH-MM_N.png` (local time to the
+minute, then a counter from 1 within that minute, for example `SotA_09-07-26_10-15_2.png`). The regular client saves
+them in `%USERPROFILE%\Pictures\SotA\` itself (confirmed by Darren, 2026-11-23). The name gives only the minute, so use the file's own time for matching. The game's keys (in the client's
+`Settings\*.sotasettings`): `TakeScreenshot` on F11 and `ScreenshotMode` (hides the interface) on F10. A plugin
+can't press either; `ShroudIsUIActive()` only reads whether the interface is shown.
+
 ## Every file starts the same way
 
 Every file the plugins write begins with the same fields (`plugin` added in sl-admin v0.10.0 / sl-skills v0.1.0,
@@ -491,7 +535,7 @@ the others in v0.7.1):
 | `apiVersion` | The game's Lua API version when the file was written. |
 | `plugin` | Which add-on wrote it: `"sl-admin"` or `"sl-skills"`. **Missing means the old single add-on, `sl-recipes`**, which is `sl-admin`'s past (versions 0.7.1 to 0.9.0). |
 | `pluginVersion` | The version of that add-on (`major.minor.patch`), its `Version` in `core.lua` and `manifest.json`. Compare versions only within one `plugin`. |
-| `type` | What kind of file it is: `"recipes"` (`sotalore-recipes-new.json`, `-all.json` and `-one.json`, which also have a `scope`), `"items"` (`sotalore-item-catalog.json`), `"finds"` (`sotalore-scene-finds.json`) or `"skills"` (`sotalore-skills.json`, from `sl-skills`). Use it to refuse a file uploaded to the wrong place. |
+| `type` | What kind of file it is: `"recipes"` (`sotalore-recipes-new.json`, `-all.json` and `-one.json`, which also have a `scope`), `"items"` (`sotalore-item-catalog.json`), `"finds"` (`sotalore-scene-finds.json`), `"gameSkills"` (`sotalore-game-skills.json`, not uploaded), `"currentScene"` (`sotalore-current-scene.json`, not uploaded, read by the companion) or `"skills"` (`sotalore-skills.json`, from `sl-skills`). Use it to refuse a file uploaded to the wrong place. |
 
 **Files written before 0.7.1 have no `pluginVersion` or `type`** (the file name says the kind). Their plugin
 version is unknown, so treat a missing `pluginVersion` as "older than 0.7.1", not as any particular version. This
@@ -711,6 +755,10 @@ never by name. Recipe count differs from an earlier export of the same character
 
 
 ## Changelog
+
+- 2026-11-23, v0.16.0: new file `sotalore-current-scene.json` (`"type": "currentScene"`), the scene the player is in
+  and when it was entered, for the companion to file screenshots by scene (sotalore/sladmin#2, for
+  sotalore/companion#3 and #4). Not uploaded. Also noted where the game saves screenshots. No other format changed.
 
 - 2026-11-23: moved from `sl-lua/EXPORT-FORMAT.md` in `sotalore/sotalore` with the split into separate repos.
   The players' skills code and file moved to `sotalore/slskills`'s `EXPORT-FORMAT.md`. No format changed.
