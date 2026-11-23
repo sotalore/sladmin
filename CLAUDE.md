@@ -17,8 +17,11 @@ particular to `sl-admin`.
 - `EXPORT-FORMAT.md`: **the contract with the app (and later the companion), and yours to keep accurate.**
   Change it in the same PR as any export change, flag breaking changes in it, and add a line to its changelog.
   The app reads exactly what it describes.
-- `FROM-THE-APP.md`: written by the app-side agent (how the site uses exports, the site's data model, and the
-  requests R1 to R6 from before issues). **Read it, never edit it.**
+- `FROM-THE-APP.md` lives in the app repo, at `docs/FROM-THE-APP.md` of `sotalore/sotalore`: written by the
+  app-side agent (how the site uses exports, the site's data model, and the requests R1 to R6 from before issues).
+  Read it from the side-by-side checkout (`../sotalore/docs/FROM-THE-APP.md`, after a pull) or with
+  `gh api repos/sotalore/sotalore/contents/docs/FROM-THE-APP.md -H 'Accept: application/vnd.github.raw'`.
+  **Read it, never edit it**; the `FROM-THE-APP.md` here is only a pointer to it.
 - **Requests from the app are issues in this repo** (`gh issue list -R sotalore/sladmin`). Answer in the issue.
   When the answer changes an export, change the plugin and `EXPORT-FORMAT.md` in the same PR, with
   "Closes #N"; when nothing changes, a comment is the whole answer. Tell the reader agents about a merged format
