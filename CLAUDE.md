@@ -230,6 +230,6 @@ Untested ideas:
 ## Working style
 
 - Keep `main.lua` in the plain style it has: local helpers, comments for the non-obvious "why".
-- One topic per PR. Do not commit or open a PR unless asked; describe in the PR what is verified in game
-  and what is not.
-- Before starting work, find or open its issue in this repo (`bug` or `enhancement`), and put "Closes #N" in the PR.
+- One topic per commit. Do not commit or push unless Darren asks; when he does, push straight to `main` (no
+  branches or PRs). Say in the commit message what is verified in game and what is not.
+- Before starting work, find or open its issue in this repo (`bug` or `enhancement`), and put "Closes #N" in the commit message.
