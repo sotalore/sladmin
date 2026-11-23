@@ -1,18 +1,14 @@
-# SotaLore plugin export format (sl-admin v0.15.0, sl-skills v0.2.0)
+# sl-admin export format (v0.15.0)
 
-Context for an AI session working on importing this data into a fansite database for the game
-*Shroud of the Avatar*. The data comes from two in-game Lua add-ons, whose code is in this folder:
-
-| Plugin (slug) | Name | Who uses it | Writes |
-|---------------|------|-------------|--------|
-| `sl-admin` | SotaLore Admin | site admins | recipe files, the items file, the finds file |
-| `sl-skills` | SotaLore Skills | players | the skills code (copied and pasted) and the skills file |
+The contract between `sl-admin` (SotaLore Admin, the add-on for site admins) and the readers of its files: the
+app in `sotalore/sotalore`, and later the companion. **Only this repo changes this file**, in the same PR as the
+export change; see "Contracts" in `AGENTS.md` (`sotalore/hq`). The other plugin, `sl-skills`, has its own file in
+`sotalore/slskills`.
 
 Until 2026-10-18 there was one add-on, `sl-recipes` (display name SotaLore), which did everything; it became
 `sl-admin`, and the skills work moved to `sl-skills`. **Version numbers before 0.10.0 are that one add-on's**, which
-is `sl-admin`'s history; `sl-skills` counts from 0.1.0. Every version-specific note below names `sl-admin`'s
-version unless it says otherwise. Lua API docs: https://catnipgames.net/lua/reference.html (sl-admin needs Lua API
-37+, sl-skills 14+).
+is `sl-admin`'s history. Lua API docs: https://catnipgames.net/lua/reference.html (sl-admin needs Lua API 37+, and
+51+ for its data files).
 
 ## What produces the files
 
@@ -388,7 +384,7 @@ figure can't be worked out from the file (the stack size isn't in it). From v0.1
 right ones; the finds list keeps the wrong numbers of items gained before the update until it is reset (a new gain
 of the same item corrects it). Files saved by plugins before 0.4.0 hold stack totals.
 
-**A real file:** `data/plugin-examples/sotalore-item-catalog.json` is an "All items" export from sl-admin v0.12.0 (API 44,
+**A real file:** the app's `spec/fixtures/plugin-examples/sotalore-item-catalog.json` is an "All items" export from sl-admin v0.12.0 (API 44,
 2026-10-24): 307 items and 51 `craftedSamples` (swords, a dagger, a hammer, a staff, an axe, shields, plate, chain,
 leather and cloth armour, wings, rings, necklaces, artifacts). 10 components have a `craftingBonus`, among them the
 socketable gems and jewels (Imbued Gem of Rending, Imbued Gaiaism Jewel...) and Elven Hilt. 149 items have `null`
@@ -446,48 +442,13 @@ Player names can be in it; keep only names that are accepted.
 The levels of fought creatures are better too from v0.11.0: a creature that was the target before the fight
 (the usual case) keeps the level read then, where before it was only read during the fight.
 
-**A real file:** `data/plugin-examples/sotalore-scene-finds.json` (sl-admin v0.11.1, API 44, Serpent's Spine
+**A real file:** the app's `spec/fixtures/plugin-examples/sotalore-scene-finds.json` (sl-admin v0.11.1, API 44, Serpent's Spine
 Foothills; right weights and values, e.g. Animal Hide 0.4 and 10). Three fought: Large Timber Wolf (40), Large Stag
 (no level) and **Fighter** (7 of them, no level), which is an NPC: NPCs that fight the player get onto `creatures`
 from the combat lines, not only onto `seen`, so the site's review of unknown names applies to both lists. Three
 only seen: Doe (2), Rabbit (1), Squirrel (1). Note "Squirrel": only seen, yet also a node, because its corpse was
 field dressed (someone else, or a pet, did the killing; an earlier file had a Large Grey Wolf the same way). So a
 `seen` name that is also a node name in the same scene is a creature too.
-
-### Skills (code and file), from `sl-skills` v0.1.0, in use
-
-Written by the players' add-on, **`sl-skills`** (SotaLore Skills), not by `sl-admin`. The site keeps, per avatar,
-each skill's current level and a target level. The target exists only on the site;
-the current level comes from `ShroudGetSkills()`, which lists only the skills the character has **trained** (an
-untrained skill is simply absent: read it as level 0). The level used is `trainedLevel` (what the experience has
-bought), not `level`, which a scene's skill cap can lower. `/slskills` (or its key binding) opens the "SotaLore
-Skills" window; `/slskills file` writes `sotalore-skills.json`. (In sl-admin v0.9.0,
-which was never released, the same window lived in the admin add-on.) sl-skills v0.2.0 changed only the window's wording and dropped its "Save file" button; the code and the file are unchanged.
-
-**The file** (`"type": "skills"`) has the header, `character` (the avatar's name) and `skills`, one entry per trained
-skill, sorted by `id`: `id` (the game's stable number), `key` (the game's stable name, e.g. "Fireball"), `name`,
-`school`, `schoolKey`, `subcategory` (the names the skills window shows, in the player's language), `trainedLevel`,
-`level`, `effectiveLevel`, `experience`, `grandmaster`, `mode`. The site does not read it (its skills already
-carry the game's ids, from the development team's skill list); it is for checking.
-
-**The code** is for the player to copy and paste without saving a file. A plugin text box holds at most 1024
-characters and Lua cannot reach the clipboard, so the code is cut into pages of up to 1000 characters; the window
-shows one page at a time and the player copies each in turn (click the box, Ctrl+A, Ctrl+C). A page reads
-
-    SLS1|<page>/<pages>|<id digits>|<o or ->|<character>|<entries>|<check>
-
-`SLS1` is the format. `<entries>` is a run of fixed-width entries, each a skill `id` then its `trainedLevel`, both
-**base 36, lower case**: the id in `<id digits>` characters, the level in 2. If any id is negative the plugin adds
-2147483648 to every id and writes `o` in the fourth field (subtract it again); otherwise it writes `-`.
-`<check>` is two base 36 digits: with `sum = 0`, for each byte `b` of `<entries>`: `sum = (sum * 31 + b) mod 1296`;
-the check is `sum` in 2 digits. The pages of one code have the same `<pages>` and `<id digits>`, and the
-site should accept them in any order. The character name has `|` and control characters removed.
-
-**In use.** Players paste the code on an avatar's skills page on the site ("Import from game"), all pages into
-one box. Measured on 2026-10-18: the game's skill ids are the same as the development team's skill list
-(`data/skill-costs.csv`, "Skill ID"), the highest is 13310 (`a9q`), so `<id digits>` is 3 and an entry is 5
-characters; a character with 338 trained skills needs **two pages**. Copying from the plugin's text box with
-Ctrl+A, Ctrl+C works in the game. The format stays as described; a change to it would be `SLS2`.
 
 ### Every skill in the game, from `sl-admin` v0.15.0 (not uploaded)
 
@@ -505,7 +466,7 @@ app's code is built from it. It lists every skill the game's skills window draws
 skills window shows them, in the player's language), `schoolKey` (the school's stable key), `xpMultiplier` (how many times
 the standard experience the skill needs per level: 1 is standard, 0.5 half). Experience costs per level aren't in the API.
 
-**A real file:** `data/plugin-examples/sotalore-game-skills.json` (sl-admin v0.15.0, API 57, 378 skills, 2026-11-07). Since the first file (API 56, 363 skills, 2026-10-30) the game added the Seafaring school (ids 16000 to 16013) and two Focus skills (Eidetic Memory 176, Mental Reflex 178), removed Life Warding (3757), and changed skill 138's `key` from `Redirection` to `Balance`: a `key` can change, so match skills on `id`.
+**A real file:** the app's `spec/fixtures/plugin-examples/sotalore-game-skills.json` (sl-admin v0.15.0, API 57, 378 skills, 2026-11-07). Since the first file (API 56, 363 skills, 2026-10-30) the game added the Seafaring school (ids 16000 to 16013) and two Focus skills (Eidetic Memory 176, Mental Reflex 178), removed Life Warding (3757), and changed skill 138's `key` from `Redirection` to `Balance`: a `key` can change, so match skills on `id`.
 
 **Compared with `data/skill-costs.csv`** (360 skills, 2026-10-30): its columns are `subcategory` (Category), `school`, `name`
 (Skill Name), `id` (Skill ID), `key` (Internal Name) and `xpMultiplier` (Exp Factor). All 360 are in the file, and every value
@@ -692,7 +653,7 @@ The numbers below were measured on a full export from 2026-10-17 (plugin 0.7.2, 
 character knows 1,234; no duplicate ids, 604 negative), 3,994 ingredient slots (877 are group slots), 240 groups,
 1.9 MB. Every recipe has a `station`; every `locations` is `["any"]`; no stat `value` is `null`.
 
-The example now in `data/plugin-examples/sotalore-recipes-all.json` is the same character's full export of
+The example now in the app's `spec/fixtures/plugin-examples/sotalore-recipes-all.json` is the same character's full export of
 2026-10-20 (sl-admin 0.11.0, API 44): 1,235 recipes, no duplicate ids, 606 negative, 3,998 slots (878 group
 slots), 240 groups. Against the earlier file: one recipe learned (Triangle Kobold Tent), and **three recipes
 changed id with the same name**: Shrine of Gaiaism 7001803 → 1973457948, Shrine of Lunaism 376721338 →
@@ -747,3 +708,9 @@ never by name. Recipe count differs from an earlier export of the same character
 - Recipe `id` stability across characters, patches and test/live servers.
 - Whether ingredient names always equal the fansite item names (localization, renames).
 - File size: with group choices and stats the file may be several MB.
+
+
+## Changelog
+
+- 2026-11-23: moved from `sl-lua/EXPORT-FORMAT.md` in `sotalore/sotalore` with the split into separate repos.
+  The players' skills code and file moved to `sotalore/slskills`'s `EXPORT-FORMAT.md`. No format changed.

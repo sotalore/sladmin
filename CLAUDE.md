@@ -1,39 +1,31 @@
-# CLAUDE.md (sl-lua)
+# CLAUDE.md (sladmin)
 
-Notes for the agent working on the SotaLore in-game Lua plugins. The repo-root `CLAUDE.md` still applies
-(notably: do not stage or commit unless asked). Work only inside `sl-lua/`.
+@../hq/AGENTS.md
+@../hq/LUA-PLUGINS.md
+
+Notes for the `sladmin` agent, working on `sl-admin` (SotaLore Admin), the in-game Lua add-on for site admins:
+recipe, item, per-scene find and game-skill exports, as files for the site. The rules every SotA Lore plugin follows
+(naming, how the game runs a package, saved data, testing) are in `LUA-PLUGINS.md` above; this file is what's
+particular to `sl-admin`.
 
 ## What this is
 
-Two Lua add-ons (packages) for *Shroud of the Avatar*, one folder each. A package folder must be flat (no
-subfolders), and its folder name is its slug:
-
-| Folder (= slug) | Name | For | Global table |
-|-----------------|------|-----|--------------|
-| `sl-admin/` | SotaLore Admin | site admins: recipe, item and per-scene find exports, as files to upload | `SotaLoreAdmin` |
-| `sl-skills/` | SotaLore Skills | players: copy their trained skills into the site's skill planner | `SotaLoreSkills` |
-
-Until 2026-10-18 there was one package, `sl-recipes`; it became `sl-admin` (the skills work moved out).
-
-- **The two must stay independent.** All add-ons share one global environment, so they never use the same
-  global name, and `sl-skills` must not use anything from `sl-admin`: most players will only have `sl-skills`.
-  Each has its own small `core.lua`; a little duplication (JSON helpers) is the price of that.
-- Each has its own `manifest.json` (load order and package metadata) and its own version number. Every file
-  either writes starts with `"plugin"` (the slug) and `"pluginVersion"`.
-- The shared docs stay here at the top of `sl-lua/`, outside the packages:
-  - `EXPORT-FORMAT.md`: **the contract with the importer, and yours to keep accurate.** Change it in the
-    same change as any export change, and flag breaking changes in it. The app side reads exactly what it
-    describes.
-  - `FROM-THE-APP.md`: written by the app-side agent (how the site uses exports, the site's data model, and the
-    requests R1 to R6 from before issues). **Read it, never edit it.**
-- **Requests from the app are GitHub issues labelled `plugin`** (since 2026-10-25), on sotalore/sotalore:
-  `gh issue list -R sotalore/sotalore --label plugin`. See "Tracking work" in the repo-root `CLAUDE.md` for the
-  rest (tracking issues, sub-issues, labels, signing what you write). **Answer in the issue.** When the answer
-  changes an export, change the plugin and `EXPORT-FORMAT.md` in the same PR, with "Closes #N"; when nothing
-  changes (a question answered, something the game can't do), a comment on the issue is the whole answer. The
-  repo is public: nothing private in an issue.
-- Real example outputs are in `data/plugin-examples/` (repo root). `.gitignore` ignores `sotalore-*.json`
-  everywhere else so game output is never committed by accident.
+- The package is the `sl-admin/` folder (flat, its name is the slug); everything at the top of the repo is outside
+  the package, so the store never sees it. Its global table is `SotaLoreAdmin`, its command `/sladmin`.
+- `sl-admin` has a twin helper set in `sotalore/slskills` (`sl-skills/core.lua`: `jstr`, `jnum`, `header`,
+  `writeFile`). A fix to one of those here is checked there, and the other way round.
+- `EXPORT-FORMAT.md`: **the contract with the app (and later the companion), and yours to keep accurate.**
+  Change it in the same PR as any export change, flag breaking changes in it, and add a line to its changelog.
+  The app reads exactly what it describes.
+- `FROM-THE-APP.md`: written by the app-side agent (how the site uses exports, the site's data model, and the
+  requests R1 to R6 from before issues). **Read it, never edit it.**
+- **Requests from the app are issues in this repo** (`gh issue list -R sotalore/sladmin`). Answer in the issue.
+  When the answer changes an export, change the plugin and `EXPORT-FORMAT.md` in the same PR, with
+  "Closes #N"; when nothing changes, a comment is the whole answer. Tell the reader agents about a merged format
+  change (see "Messages" in `AGENTS.md`).
+- Real example outputs live in the app, in `spec/fixtures/plugin-examples/` of `sotalore/sotalore`. When a format
+  changes, open an issue there to refresh them. `.gitignore` ignores `sotalore-*.json` so game output is never
+  committed here by accident.
 
 ## Code organisation
 
@@ -59,35 +51,9 @@ comment saying what it is for. This is the pattern the game's own multi-file exa
 | `game_skills.lua` | `SotaLoreAdmin.GameSkills`: every skill in the game (`ShroudGetAllSkills`) to `sotalore-game-skills.json`, `/sladmin gameskills`; not uploaded, copied into the repo for the app's code |
 | `main.lua` | the only file with `ShroudOn...` callbacks, the `/sladmin` command and the key binding; read it first |
 
-`sl-skills/`:
+Data modules (`recipes_export`, `finds_data`) know nothing about windows. They tell a window about
+changes through a hook (`Finds.onChange`, `RecipeExport.onProgress`) that the UI file sets.
 
-| File | Job |
-|------|-----|
-| `core.lua` | creates the one global table `SotaLoreSkills`; a few helpers in `SotaLoreSkills.util` (JSON writing, file writing, the file header) |
-| `skills.lua` | `SotaLoreSkills.Skills`: the trained skills (`ShroudGetSkills`), the skills file, and the paged base 36 code the player copies into the site |
-| `skills_ui.lua` | `SotaLoreSkills.SkillsUI`: the skills window: what the add-on is for (with the site address), how to copy, the code in a text box, pages, Refresh. Every text in it is for a player who only copies and pastes (no ids or sizes) |
-| `main.lua` | the `ShroudOn...` callbacks, the `/slskills` command and the key binding |
-
-`sl-skills/icon.png` is the add-on's icon in the add-on manager and the store (named by the manifest's `"icon"`): the
-site's favicon (`public/android-chrome-512x512.png`) scaled to 256x256, the size other store add-ons use. A
-package may hold only `icon.png`, `README.md`, its listed files and a few images, sounds or data files; any other
-file makes the store upload fail.
-
-Rules for keeping them working:
-
-- The files of a package run in the order its `manifest.json` lists them and share one environment. A file
-  may only use modules from files listed **before** it (at load time). A new file must be added to the
-  manifest.
-- Everything is `local` except the package's single global (`SotaLoreAdmin` or `SotaLoreSkills`). Share things
-  between files by hanging them on it. Check with `luac -o NUL -l -l file.lua` that a file reads no stray
-  globals (a local function used before it is defined shows up as one).
-- Files can't load each other (`require` and `dofile` are not allowed) and the `Shroud...` functions don't
-  exist while a file loads: **do not call the game's API at the top level of a file**, only inside
-  functions (`Shroud.UI` is the one exception). `local UI = Shroud.UI` at the top is fine.
-- Only `main.lua` defines `ShroudOn...` functions; each should just call into a module. (The game keeps each
-  package's callbacks apart, so both packages having a `ShroudOnStart` is fine.)
-- Data modules (`recipes_export`, `finds_data`) know nothing about windows. They tell a window about
-  changes through a hook (`Finds.onChange`, `RecipeExport.onProgress`) that the UI file sets.
 ## What the finds window is for
 
 Darren walks a scene with the finds window up, then saves the list for upload. The goal is to keep the
@@ -137,67 +103,23 @@ Untested ideas:
 
 ## Environment
 
-- **Each game client has its own Lua folder** under `%APPDATA%\Catnip Games\`: `Shroud of the Avatar\Lua` for the
-  regular client and `Shroud of the Avatar(DEV)\Lua` for the QA client. Until 2026-11-04 both clients used the
-  `(DEV)` one; since 2026-11-05 (API 57) the regular client has its own, with its own saved data, add-on data files and
-  output files (started as copies of the `(DEV)` ones that day). So check which client Darren is playing before
-  reading his files; `/lua path` in the game opens that client's folder.
-- The game loads a package only from `Lua/<slug>/`. In **both** clients' Lua folders, each package folder is a
-  **Windows junction** to the repo: `...\Lua\sl-admin` to `C:\dev\sotalore\sl-lua\sl-admin`, and `...\Lua\sl-skills`
-  to `C:\dev\sotalore\sl-lua\sl-skills`, so both clients always run the plugins as they are here (the regular client's
-  were plain copies until 2026-11-06; before the split a single junction `Lua\sl-recipes` pointed at `sl-lua`). Edit
-  here (`C:\dev\sotalore\sl-lua`), never through the game's path: that once failed with odd "file already exists"
-  errors. Remove a junction with `cmd /c rmdir <path>`, which removes only the link; a recursive delete can go through
-  it into the repo.
-- The plugins' output files are written to the client's `Lua/` folder, **one level above the plugin folders**
-  (`sotalore-recipes-new.json`, `-recipes-all.json`, `-recipes-one.json`, `-item-catalog.json`, `-scene-finds.json`,
-  `-skills.json`; named after the site's navigation since sl-admin 0.11.0), not into `sl-lua/`. To
-  use one as an example, copy it from there into `data/plugin-examples/`.
-- **Saved variables are kept per slug** (and per client): `Lua\SavedVariables\<slug>.account.json` (and per character). Renaming
-  a package starts it with empty saved data unless that file is copied to the new slug's name while the game
-  is closed or logged out (the game writes it at logout). `sl-recipes.account.json` was the admin plugin's.
-- **A saved file over 256 KB is not written at all.** The game writes saved data at logout, at unload (`/lua reload`
-  and every scene change) and on `ShroudFlushSavedVars`, and skips a scope whose JSON is over 256 KB, with only a line
-  in the add-on console. On 2026-10-24 `sl-admin.account.json` had reached 256,011 bytes (210 KB of it item details
-  storing every parsed field and a long fingerprint), and a day of captures was lost at a reload. Since 0.12.0 the
-  item details are stored small (about 100 KB for 286 items), gear samples live in the character scope, and saving
-  calls `util.flush()`, which writes at once and warns in chat when the game refuses. Keep an eye on the size of
-  anything that grows with play. The files start with a UTF-8 byte-order mark. On 2026-10-30 the account file reached
-  260 KB and the game refused it again (620 items, 214 KB of item details), so since 0.14.0 the details are in a data file.
-- **Add-on data files (API 51)** hold what is too big for saved variables: `Lua/AddonData/<slug>/`, 1 MB of JSON per file,
-  16 files, written at once and whole. Each file takes one write every 10 seconds and an add-on 4 per 10 seconds, so
-  saves are spaced 11 seconds apart, and a forced save refused as `tooOften` (at unload) goes to a second file, which
-  is read first and removed by the next write of the main file. Whether a write works during unload is untested.
-- **The game cannot be launched from this session.** A standalone Lua (5.5, installed with scoop; `lua` and
-  `luac` on the PATH) is available on Darren's machine: use `luac -p file.lua` to syntax-check every file
-  after an edit. For behaviour, write a throwaway fake-game script (stub `Shroud.UI`, `Shroud.Command`,
-  the `Shroud...` getters and saved variables, then call the `ShroudOn...` callbacks) and compare the output
-  files with the previous version's; the 0.5.1 refactor was verified that way (old single file vs the
-  modules gave byte-identical output). It is only a fake game, and the game's interpreter is older
-  (5.2-style), so say plainly that a change is untested in game. Darren tests in game (`/lua reload`,
-  `/lua check sl-admin`, `/lua check sl-skills`) and reports errors or pastes the output files.
+- Both game clients' `Lua\sl-admin` folders are **Windows junctions** to this repo's package folder,
+  `C:\dev\sotalore\sladmin\sl-admin`, so both clients run the plugin as it is here. Edit here, never through the
+  game's path (that once failed with odd "file already exists" errors). Remove a junction with `cmd /c rmdir
+  <path>`, which removes only the link; a recursive delete can go through it into the repo.
+- Output files (`sotalore-recipes-new.json`, `-recipes-all.json`, `-recipes-one.json`, `-item-catalog.json`,
+  `-scene-finds.json`, `-game-skills.json`; named after the site's navigation since 0.11.0) land in the client's
+  `Lua/` folder.
+- `sl-recipes.account.json` was this plugin's saved data before the rename to `sl-admin`.
+- **The 256 KB saved-data limit has bitten twice.** On 2026-10-24 `sl-admin.account.json` reached 256,011 bytes
+  (210 KB of it item details) and a day of captures was lost at a reload. Since 0.12.0 the item details are stored
+  small, gear samples live in the character scope, and saving calls `util.flush()`, which writes at once and warns
+  in chat when the game refuses. On 2026-10-30 the account file reached 260 KB (620 items) and the game refused it
+  again, so since 0.14.0 the details are in a data file. Saved files start with a UTF-8 byte-order mark.
+- **Data files:** saves are spaced 11 seconds apart, and a forced save refused as `tooOften` (at unload) goes to a
+  second file, which is read first and removed by the next write of the main file. Whether a write works during
+  unload is untested.
 - Edit tool calls in parallel on one file can collide; make edits to one file one at a time.
-- Bump a package's version together in its `core.lua` (`local Version`) and its `manifest.json`, and mention
-  it in `EXPORT-FORMAT.md` where a format changed.
-
-## Naming rules for every SotaLore plugin
-
-Keep every plugin (these two and any later one) named the same way, so players and admins can guess the
-command from the plugin's name. For a plugin about `<name>`:
-
-| What | Rule | sl-admin | sl-skills |
-|------|------|----------|-----------|
-| Folder and slug | `sl-<name>` | `sl-admin` | `sl-skills` |
-| Display name (manifest `name`, `ScriptName`) | `SotaLore <Name>` | SotaLore Admin | SotaLore Skills |
-| Slash command | `/sl<name>` (lower case, no hyphen; the game allows `[a-z][a-z0-9]{2,23}`) | `/sladmin` | `/slskills` |
-| Key binding label | `SotaLore <Name>: ...` | SotaLore Admin: toggle toolbar | SotaLore Skills: toggle window |
-| Window titles | start `SotaLore` | SotaLore Admin (the toolbar), SotaLore Finds, SotaLore Items, SotaLore Recipes | SotaLore Skills |
-| Chat lines | the game prefixes `[Add-on: <display name>]` itself | | |
-| Output files | `sotalore-<kind>.json`, the kind named after the site's navigation; `"plugin"` = the slug in the header | `sotalore-scene-finds.json` | `sotalore-skills.json` |
-| Global table (the only global the plugin defines besides its `ShroudOn...` callbacks) | `SotaLore<Name>` | `SotaLoreAdmin` | `SotaLoreSkills` |
-
-`/sotalore` itself is refused by the game ("sota" is a reserved prefix), which is why the prefix is `sl`. Before
-2026-10-18 the admin plugin's global was `SotaLore` and its command `/slore`.
 
 ## Slash commands, windows, saved data
 
@@ -207,10 +129,8 @@ command from the plugin's name. For a plugin about `<name>`:
   changed items), `itemsall`, `baselineitems`, `finds` (toggle the finds window), `savefinds`, `clearfinds`,
   `gatherlog`, `checkrecipes`, `capture`, `hoverlog`, `targetlog`, `gameskills`; other text searches the recipe list. The command's help
   text must be at most 120 characters.
-- `sl-skills`: `/slskills` opens the skills window, `/slskills file` saves the skills file (not mentioned to players; the window has no button for it since 0.2.0).
 - An add-on may own at most **8 windows**. `sl-admin` (since 0.13.0): the toolbar, the finds, items and recipe list
   windows (4), and up to 4 recipe windows (before: the list, the finds window and up to 6 recipe windows).
-  `sl-skills`: the skills window.
 - `sl-admin`'s windows (0.13.0): the toolbar "SotaLore Admin" has three buttons, Finds, Items and Recipes, each
   opening or closing one window. "SotaLore Finds" tracks a scene; "SotaLore Items" (built like it) shows the bag,
   capture and gear sample counts, with the Capture switch and the New items / All items buttons; "SotaLore Recipes"
@@ -219,10 +139,11 @@ command from the plugin's name. For a plugin about `<name>`:
 - `sl-admin` account-scope saved variables: `exported` (recipe ids already exported; "Export new" = not in it),
   `itemSigs` (a fingerprint per item for what was last exported; no catalog of items is kept), `finds`
   (the per-scene list), `track` (tracking toggle). Character scope: `gearSamples` (gear breakdowns, a list, each with
-  its tooltip text, key and an exported flag). `sl-skills` keeps none.
+  its tooltip text, key and an exported flag).
 - `sl-admin` data file (since 0.14.0, in `Lua/AddonData/sl-admin/`): `item_details.json`, `{ items = ... }`, the captured
   tooltips (stored small: name, text, a short fingerprint `fp` and `rev`, everything else worked out from the text). Until
   then it was the saved variable `itemDetails`, which the first save moves over and removes.
+
 ## API facts learned in play (docs are at https://catnipgames.net/lua/reference.html)
 
 - Read the docs by downloading the page, stripping the HTML to text and searching it; a summarising
@@ -302,25 +223,13 @@ command from the plugin's name. For a plugin about `<name>`:
   source.
 - Group slots in recipes list at most 30 choices; the larger "any item of this kind" groups are truncated
   (`complete: false` in `groups`). Names repeat, so groups are identified by `groupKey`.
-- `Shroud.UI` windows start closed; `Show()` is refused for 3 s after the player closes it
-  (so clicking a recipe again right after closing its window does nothing until 3 s have passed). That
-  is the game protecting players from misbehaving add-ons: **leave it alone, do not work around it** (no
-  retry loops, no fresh window ids to dodge it). Darren decided this on purpose. Change
-  callbacks can fire before `ShroudOnStart` has built the windows, so guard them.
 - The game has a hotkey that switches tooltips off. While they are off the `...UnderMouse` calls see nothing,
   so `/sladmin capture` and `/sladmin hoverlog` capture nothing, and the plugin can't tell that from "not pointing at
   an item". Nothing to do about it for now; the capture-on message in chat reminds the player.
-- **A file can't be opened for adding to its end** (`io.open(path, "a")` fails, found 2026-10-24 with the hover
-  log, which then wrote nothing and said "0 tooltips"). A file that grows is kept in memory and written whole with
-  `"w"` each time (`hoverlog.lua`). Whether `"r"` works is untested (`util.readFile` returns nil if not).
-- Lua cannot open the folder, run slash commands or reach the clipboard. `/lua path` (typed by the player)
-  opens the output folder.
 
 ## Working style
 
 - Keep `main.lua` in the plain style it has: local helpers, comments for the non-obvious "why".
 - One topic per PR. Do not commit or open a PR unless asked; describe in the PR what is verified in game
   and what is not.
-- Before starting plugin work, find or open its GitHub issue (labels `plugin` plus `bug` or `enhancement`), and
-  put "Closes #N" in the PR. `gh` is signed in as Darren, so end issues and comments with
-  `_Opened by Claude Code for @darrenboyd._` (or "Comment by Claude Code").
+- Before starting work, find or open its issue in this repo (`bug` or `enhancement`), and put "Closes #N" in the PR.
